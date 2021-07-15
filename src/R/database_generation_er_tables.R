@@ -159,6 +159,16 @@ tmp <-
 
 er_tables[["ade_nichd"]] <- tmp
 
+# ADE_NICHD_ENRICHMENT ----------------------------------------------------
+
+tmp <- 
+  fread(paste0(data_dir,"database_generation_stage_enrichment_ade_class_data.csv"))
+
+er_tables[["ade_nichd_enrichment"]] <- 
+  tmp[,.(atc_concept_name,meddra_concept_name,nichd,
+         atc_concept_class_id,meddra_concept_class_id,
+         a,b,c,d,lwr,odds_ratio,upr,pvalue,fdr = fdr_all)]
+
 # ADE_NICHD_COVARIATE_SUMMARY ---------------------------------------------
 
 sub <- 
@@ -429,7 +439,7 @@ data.table(
     null_99 = "The gam risk coefficient value at the 99th percentile of the risk coefficient distribution from random drug and event GAMs. If a risk coefficient at at least one stage for a drug-event GAM is higher than this value, then the drug-event GAM is significant by the null model.",
     
     ##drug##
-    atc_concept_name = "The ATC 5th level OMOP concept name.",
+    atc_concept_name = "The ATC 5th level OMOP concept name. In the ade_nichd_enrichment table, this ATC concept is from any level in the hierarchy.",
     atc_concept_code = "The ATC 5th level OMOP concept code.",
     atc4_concept_name = "The ATC 4th level OMOP concept name.",
     atc4_concept_code = "The ATC 4th level OMOP concept code.",
@@ -461,7 +471,7 @@ data.table(
     meddra_concept_code_2 = "The MedDRA higher level concept code identifier.",
     meddra_concept_code_3 = "The MedDRA higher level greater term concept code identifier.",
     meddra_concept_code_4 = "The MedDRA system organ class concept code identifier.",
-    meddra_concept_name_1 = "The MedDRA preferred term concept name.",
+    meddra_concept_name = "The MedDRA preferred term concept name. In the ade_nichd_enrichment table, this MedDRA concept is from any level in the hierarchy.",
     meddra_concept_name_2 = "The MedDRA higher level concept name.",
     meddra_concept_name_3 = "The MedDRA higher level greater term concept name.",
     meddra_concept_name_4 = "The MedDRA system organ class concept name.",
@@ -488,6 +498,19 @@ data.table(
     wt_pvalue = "The Mann Whitney p-value from evaluating the rank difference between the mutual information distributions of drug substrates versus drug non-substrates. See the manuscript methods for details.",
     ttest_statistic = "The Student's t-test statistic from evaluating the average difference between the mutual information distributions of drug substrates versus drug non-substrates. See the manuscript methods for details.", 
     ttestt_pvalue = "The Student's t-test p-value from evaluating the average difference between the mutual information distributions of drug substrates versus drug non-substrates. See the manuscript methods for details.",
+    
+    ##ade_nichd_enrichment##
+    atc_concept_class_id = "The MedDRA concept class identifier.",
+    meddra_concept_class_id = "The MedDRA concept class identifier.",
+    a = "The number of significant, by the null model, drug-events in both the stage and ATC/MedDRA concept category.",
+    b = "The number of significant, by the null model, drug-events in the stage and not in the ATC/MedDRA concept category.",
+    c = "The number of significant, by the null model, drug-events not in the stage but in the ATC/MedDRA concept category.",
+    d = "The number of significant, by the null model, drug-events not in the stage and not in the ATC/MedDRA concept category.",
+    lwr = "The 95% lower bound of the odds ratio.",
+    odds_ratio = "The odds ratio for the category and stage enrichment.",
+    upr= "The 95% lower bound of the odds ratio.",
+    pvalue = "The p-value from the fisher exact test.",
+    fdr = "The FDR corrected pvalue.",
     
     tmp2 = "description"
 ) %>% melt(id.vars="tmp2",variable.name="field",value.name = "description")
