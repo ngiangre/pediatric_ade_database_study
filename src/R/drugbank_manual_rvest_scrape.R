@@ -1,3 +1,9 @@
+#' Title: "A database of pediatric drug effects to evaluate ontogenic mechanisms from child growth and development" study
+#' 
+#' Script author details: Nicholas Giangreco
+#' 
+#' This script scrapes drugbank to retrieve drug-gene relationships
+#' 
 # PURPOSE -----------------------------------------------------------------
 
 #' manual sacrape drugbank pages to get correst drug-target-action mapping

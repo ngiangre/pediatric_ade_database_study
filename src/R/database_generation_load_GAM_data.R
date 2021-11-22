@@ -1,4 +1,9 @@
-
+#' Title: "A database of pediatric drug effects to evaluate ontogenic mechanisms from child growth and development" study
+#' 
+#' Script author details: Nicholas Giangreco
+#' 
+#' This script processes the generated dGAM data
+#' 
 # PURPOSE -----------------------------------------------------------------
 
 #' To load database generation data

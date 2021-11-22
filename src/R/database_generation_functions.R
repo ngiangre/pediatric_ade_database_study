@@ -1,8 +1,11 @@
-#' DATABASE GENERATION STUDY FUNCTIONS
+#' Title: "A database of pediatric drug effects to evaluate ontogenic mechanisms from child growth and development" study
+#' 
+#' Script author details: Nicholas Giangreco
+#' 
+#' This script contains the functions reused throughout this study
 #' 
 #' Functions sourced by database_generation* scripts
 #' 
-
 #' Construct the drug-event dataset for GAMs 
 #' 
 #' Calls 'raw_data' in global environment and uses the function-defined drug, event, and drug-event column names to construct the dataset. Optional additional covariates and their ordered factors are also taken into consideration
@@ -1896,7 +1899,7 @@ plot_drug_events <-
             geom_point(aes(nichd,gam_score,
                            color=!!as.name(color_name)),
                        position = position_dodge(width=0.5),size=2) +
-            scale_y_continuous(sec.axis=sec_axis(~.,name="Risk of ADE\n(GAM score)")) + 
+            scale_y_continuous(sec.axis=sec_axis(~.,name="Risk of ADE\n(dGAM score)")) + 
             scale_color_brewer(palette = "Dark2") +
             facet_wrap(~ade_name,labeller = label_wrap_gen(width = wrap_gen_width),scales="free_y") +
             theme(

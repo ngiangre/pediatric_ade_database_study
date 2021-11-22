@@ -1,4 +1,9 @@
-
+#' Title: "A database of pediatric drug effects to evaluate ontogenic mechanisms from child growth and development" study
+#' 
+#' Script author details: Nicholas Giangreco
+#' 
+#' This script loads the data and covariates for drug-events
+#' 
 # PURPOSE -----------------------------------------------------------------
 
 #' Load data and covariates for database generation

@@ -1,4 +1,9 @@
-
+#' Title: "A database of pediatric drug effects to evaluate ontogenic mechanisms from child growth and development" study
+#' 
+#' Script author details: Nicholas Giangreco
+#' 
+#' This script processes data from SIDER to curate side effects from drug labels
+#' 
 # PURPOSE -----------------------------------------------------------------
 
 #' To parse and clean sider data to use later

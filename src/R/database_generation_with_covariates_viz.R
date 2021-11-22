@@ -1,12 +1,12 @@
 #' Title: "A database of pediatric drug effects to evaluate ontogenic mechanisms from child growth and development" study
 #' 
-#' Author details: Nicholas Giangreco
+#' Script author details: Nicholas Giangreco
 #' 
-#' This script generates the plots of the drug-event GAM distributions and characteristics after covariate adjustment
+#' This script generates the plots of the distributions and characteristics for dGAMs and their comparison to the PRR
 
 # Purpose -----------------------------------------------------------------
 
-#' Tabulate drug-events and risk distributions for covariate-adjusted GAM
+#' Tabulate drug-events and risk distributions for dGAMs
 #' 
 
 # Setup -------------------------------------------------------------------
@@ -36,27 +36,106 @@ source("database_generation_load_GAM_data.R")
 
 source("database_generation_functions.R")
 
-# Number of drugs, aes, ades and significant ades ------------------------------------
+# Number of drugs, aes, and ades  ------------------------------------
 
 dts[database=="covariate_adjusted",length(unique(ade))]
 dts[database=="covariate_adjusted",length(unique(meddra_concept_id))]
 dts[database=="covariate_adjusted",length(unique(atc_concept_id))]
 
-dts[database=="covariate_adjusted" & gam_score_90mse>0,length(unique(ade))] 
-dts[database=="covariate_adjusted" & gam_score_90mse>0,length(unique(ade))] /
-    dts[database=="covariate_adjusted",length(unique(ade))]
+dts[database=="covariate_adjusted" & gam_score_90mse>0,length(unique(ade))]
 
-null_dts <- fread(paste0(data_dir,"database_generation_with_covariates_null_simulation.csv"))
-
-sig_null_ades <- merge(
+merge(
   dts[database=="covariate_adjusted"],
   null_dts[,.(null_99 = quantile(gam_score,c(0.99))),nichd],
   by="nichd"
 ) %>% 
-  .[gam_score_90mse>null_99,unique(ade)]
+  .[gam_score_90mse>null_99,length(unique(ade))]
 
-length(sig_null_ades)
-length(sig_null_ades)/dts[database=="covariate_adjusted",length(unique(ade))]
+# Comparing PRR and GAM scores correlating to scores at stages  ------------------------
+
+sub <- dts[
+  database=="covariate_adjusted" &
+    ade %in% sample(sig_null_ades,2e3,replace=F), 
+  .(ade,nichd,gam_score,PRR)
+]
+
+sub[is.na(PRR),"PRR"] <- 0
+
+cor_dts <- NULL
+for(st1 in stages){
+  for(st2 in stages){
+    cor_ = cor.test(sub[nichd==st1,gam_score],sub[nichd==st2,gam_score],method="spearman")
+    cor_dts <- 
+      bind_rows(
+        cor_dts,
+        data.table(nichd_1 = st1, nichd_2 = st2,cor_estimate = cor_$estimate,cor_pvalue = cor_$p.value,score="GAM")
+      )
+  }
+}
+for(st1 in stages){
+  for(st2 in stages){
+    cor_ = cor.test(sub[nichd==st1,PRR],sub[nichd==st2,PRR],method="spearman")
+    cor_dts <- 
+      bind_rows(
+        cor_dts,
+        data.table(nichd_1 = st1, nichd_2 = st2,cor_estimate = cor_$estimate,cor_pvalue = cor_$p.value,score="PRR")
+      )
+  }
+}
+
+cor_dts[score=="GAM",score:= list("dGAM")]
+g <- cor_dts %>% 
+  ggplot(aes(factor(nichd_1,levels=stages),
+             factor(nichd_2,levels=stages),
+             fill=cor_estimate)) +
+  geom_tile() +
+  scale_fill_viridis_c(guide = guide_legend()) +
+  facet_wrap(~score) +
+  guides(fill = guide_colourbar(barwidth = 12,title.position = "top",title="Spearman correlation")) +
+  xlab("") +
+  ylab("") +
+  theme(
+    strip.background = element_blank(),
+    legend.position = "bottom",
+    axis.text.x = element_text(angle=45,vjust=1,hjust=1)
+  )
+ggsave(paste0(img_dir,basename,"PRR_and_GAM_score_stage_correlation.png"),g,width=7,height=5)
+
+
+# Comparing PRR and GAM dynamics across stages -----------------------------------------
+
+sub <- 
+  dts[database=="covariate_adjusted"]
+sub[is.na(PRR)]$PRR <- 0
+norm_ades_gam <- 
+  normalize_data(sub,
+                 score="gam_score",strata="nichd",groups = c())
+norm_ades_gam$type <- "dGAM"
+norm_ades_prr <- 
+  normalize_data(sub,
+                 score="PRR",strata="nichd",groups = c())
+norm_ades_prr$type <- "PRR"
+
+g <- 
+  bind_rows(
+    norm_ades_prr,
+    norm_ades_gam
+  ) %>%
+  .[,.(ade,nichd,norm,type)] %>% 
+  unique() %>% 
+  .[ade %in% sample(sig_null_ades,2e3,replace=F)] %>%  
+  ggplot(aes(nichd,norm)) +
+  geom_line(aes(group=ade),alpha=0.1) +
+  facet_grid(type~.) +
+  theme(
+    axis.text.x = element_text(angle=45,vjust=1,hjust=1)
+  ) +
+  xlab("") +
+  ylab("Normalized score") +
+  theme(
+    strip.background = element_blank()
+  )
+ggsave(paste0(img_dir,basename,"gam_versus_prr_norm_score_across_stages.png"),g,width=6,height=6)
 
 # ADE risk distributions per stage ---------------------------------------
 
@@ -102,12 +181,13 @@ g <- tmp[,
   facet_wrap(~factor(nichd,levels=category_levels$nichd)) +
   scale_y_continuous(labels=scales::percent) +
   geom_vline(aes(xintercept=11),color="red", linetype="dashed", size=1) +
-  xlab("GAM score categories") +
+  xlab("dGAM score categories") +
   ylab("Percent of drug-events") +
   theme(
     strip.background = element_blank(),
     legend.position = 'none',
-    axis.text.x = element_text(angle=45,vjust=1,hjust=1)
+    text = element_text(size=22),
+    axis.text.x = element_text(angle=45,vjust=1,hjust=1,size=12)
   )
 ggsave(paste0(img_dir,basename,"gam_score_distributions_-10to10_boot.png"),g,width=15,height=8)
 
@@ -131,107 +211,39 @@ g <- dts[
   ggplot(aes(nichd,frac)) +
   geom_bar(stat="identity",color="black",fill="grey") +
   xlab("") +
-  ylab("Percent of nominally significant drug-events") +
+  ylab("Percent of nominally significant\ndrug-events") +
   scale_y_continuous(labels=scales::percent) +
   theme(
+    text = element_text(size=20),
     axis.text.x = element_text(angle=45,vjust=1,hjust=1)
   )
 ggsave(paste0(img_dir,basename,'significant_risks_across_stages.png'),g,width=6,height=7)
 
-# Top drug-events from report shuffling in each stage ---------------------
+# Significance from report shuffling - for defining putative ADEs --------------------------------------
 
-null_dts <- fread(paste0(data_dir,"database_generation_with_covariates_null_simulation.csv"))
-
-sig_ade_nichd <- 
-  dts[
-    database=="covariate_adjusted" & ade %in% sig_null_ades,
-    .SD[which.max(gam_score)],
-    ade
-  ] %>% 
-  .[,.(ade,nichd,gam_score)] %>% 
-  .[,
-    .(ade,top_nichd = factor(nichd,levels=stages)
-    )
-  ]
-
-sig_ade_nichd %>% 
-  fwrite(paste0(data_dir,basename,"significant_ades_max_score_in_stage.csv"))
-
-merge(
+tmp <- merge(
   dts[database=="covariate_adjusted"],
   null_dts[,.(null_99 = quantile(gam_score,c(0.99))),nichd],
   by="nichd"
 ) %>% 
-  .[
-    gam_score_90mse>null_99,
-    .(ade,nichd)
-  ] %>% 
-  unique() %>% 
-  merge(
-    dts[
-      database=="covariate_adjusted" & ade %in% sig_ade_nichd[,unique(ade)],
-      .SD[which.max(gam_score)],
-      ade
-    ] %>% 
-      .[,.(ade,nichd,gam_score,ade_name)],
-    by=c("ade","nichd")
-  ) %>% 
-  .[,
-    .(ade_name,top_nichd = factor(nichd,levels=stages),gam_score
-    )
-  ] %>% .[order(gam_score,decreasing = T)] %>% .[,.SD[1:5],top_nichd] %>% .[order(top_nichd)]
+  .[,.(ade,sig_null=as.integer(gam_score_90mse>null_99),sig_risk = as.integer(gam_score_90mse>0)),nichd] %>% 
+  .[,.N,.(nichd,sig_de_risk = paste0(sig_null,sig_risk))] 
 
-sig_ade_nichd[,.N,top_nichd] %>% 
-  .[order(top_nichd)] %>% 
-  .[,.(top_nichd,N,percent = round((N/length(sig_null_ades))*100,2))] %>% 
-  fwrite(paste0(data_dir,basename,"number_significant_ades_max_score_in_stage.csv"))
-
-
-g <- merge(
-  dts[database=="covariate_adjusted",.(ade,nichd = factor(nichd,levels=stages),gam_score)],
-  sig_ade_nichd,
-  by=c("ade")
-) %>%  
-  ggplot(aes(nichd,gam_score,group=ade)) +
-  geom_line(alpha=0.1) +
+g <- tmp %>% 
+  .[order(factor(nichd,levels=stages))] %>% 
+  .[sig_de_risk!="00"] %>% 
+  dcast(nichd ~ sig_de_risk,value.var="N") %>% 
+  .[,.(nichd,frac = `11`/`01`)] %>% 
+  ggplot(aes(factor(nichd,levels=stages),frac)) +
+  geom_bar(stat="identity",position="dodge",color="black",fill="gray") +
+  scale_y_continuous(labels=scales::percent) +
   xlab("") +
-  ylab("GAM risk") +
-  facet_grid(top_nichd~.,scales="free_y") +
+  ylab("Percent of significant drug-event risks\nnominally and by the null model") +
   theme(
-    strip.background = element_blank(),
+    text = element_text(size=20),
     axis.text.x = element_text(angle=45,vjust=1,hjust=1)
   )
-ggsave(paste0(img_dir,basename,"significant_ades_max_score_in_stage.png"),g,width=4,height=14)
-
-# Significance from report shuffling --------------------------------------
-
-null_dts <- fread(paste0(data_dir,"database_generation_with_covariates_null_simulation.csv"))
-
-null_dts[,.(null_99 = quantile(gam_score,c(0.99))),nichd] %>% 
-  .[,.(nichd = factor(nichd,levels=category_levels$nichd),null_99)] %>% 
-  .[order(nichd)]
-
-null_dts[,sum(gam_score>0),nichd]
-null_dts[,.(fpr = sum(gam_score_90mse>0)/10000),nichd] %>% .[,.(nichd = factor(nichd,levels=category_levels$nichd),fpr)] %>% .[order(nichd)]
-
-g <- null_dts %>% 
-  ggplot(aes(gam_score)) + 
-  geom_histogram(bins = 100) + 
-  scale_y_continuous(trans="log10",labels=scales::comma) +
-  xlab("GAM score") +
-  ylab("Number of drug-events") +
-  facet_wrap(~factor(nichd,levels=category_levels$nichd)) +
-  theme(
-    strip.background = element_blank()
-  )
-ggsave(paste0(img_dir,basename,'null_simulation_risks_across_stages.png'),g,width=8,height=6)
-
-num <- merge(
-  dts[database=="covariate_adjusted"],
-  null_dts[,.(null_99 = quantile(gam_score,c(0.99))),nichd],
-  by="nichd"
-) %>% 
-  .[gam_score_90mse>null_99,.(N = length(unique(ade)))]
+ggsave(paste0(img_dir,basename,'null_simulation_percent_significant_risks_across_stages.png'),g,width=6,height=7)
 
 g <- merge(
   dts[database=="covariate_adjusted"],
@@ -256,121 +268,13 @@ g <- merge(
   ylab("Percent of significant drug-events\nby the null model") +
   scale_y_continuous(labels=scales::percent) +
   theme(
+    text = element_text(size=20),
     axis.text.x = element_text(angle=45,vjust=1,hjust=1)
   )
 ggsave(paste0(img_dir,basename,'null_simulation_significant_risks_across_stages.png'),g,width=6,height=7)
 
-tmp <- merge(
-  dts[database=="covariate_adjusted"],
-  null_dts[,.(null_99 = quantile(gam_score,c(0.99))),nichd],
-  by="nichd"
-) %>% 
-  .[,.(ade,sig_null=as.integer(gam_score_90mse>null_99),sig_risk = as.integer(gam_score_90mse>0)),nichd] %>% 
-  .[,.N,.(nichd,sig_de_risk = paste0(sig_null,sig_risk))] 
 
-g <- tmp %>% 
-  .[order(factor(nichd,levels=stages))] %>% 
-  .[sig_de_risk!="00"] %>% 
-  dcast(nichd ~ sig_de_risk,value.var="N") %>% 
-  .[,.(nichd,frac = `11`/`01`)] %>% 
-  ggplot(aes(factor(nichd,levels=stages),frac)) +
-  geom_bar(stat="identity",position="dodge",color="black",fill="gray") +
-  scale_y_continuous(labels=scales::percent) +
-  xlab("") +
-  ylab("Percent of significant drug-event risks\nnominally and by the null model") +
-  theme(
-    axis.text.x = element_text(angle=45,vjust=1,hjust=1)
-  )
-ggsave(paste0(img_dir,basename,'null_simulation_percent_significant_risks_across_stages.png'),g,width=6,height=7)
-
-
-# Comparing PRR and GAM scores correlating to scores at stages  ------------------------
-
-sub <- dts[
-  database=="covariate_adjusted" &
-    ade %in% sample(sig_null_ades,2e3,replace=F), 
-  .(ade,nichd,gam_score,PRR)
-]
-
-sub[is.na(PRR),"PRR"] <- 0
-
-cor_dts <- NULL
-for(st1 in stages){
-  for(st2 in stages){
-    cor_ = cor.test(sub[nichd==st1,gam_score],sub[nichd==st2,gam_score],method="spearman")
-    cor_dts <- 
-      bind_rows(
-        cor_dts,
-        data.table(nichd_1 = st1, nichd_2 = st2,cor_estimate = cor_$estimate,cor_pvalue = cor_$p.value,score="GAM")
-      )
-  }
-}
-for(st1 in stages){
-  for(st2 in stages){
-    cor_ = cor.test(sub[nichd==st1,PRR],sub[nichd==st2,PRR],method="spearman")
-    cor_dts <- 
-      bind_rows(
-        cor_dts,
-        data.table(nichd_1 = st1, nichd_2 = st2,cor_estimate = cor_$estimate,cor_pvalue = cor_$p.value,score="PRR")
-      )
-  }
-}
-
-g <- cor_dts %>% 
-  ggplot(aes(factor(nichd_1,levels=stages),
-             factor(nichd_2,levels=stages),
-             fill=cor_estimate)) +
-  geom_tile() +
-  scale_fill_viridis_c(guide = guide_legend(title.position = "top",title="Spearman correlation")) +
-  facet_wrap(~score) +
-  xlab("") +
-  ylab("") +
-  theme(
-    strip.background = element_blank(),
-    legend.position = "bottom",
-    axis.text.x = element_text(angle=45,vjust=1,hjust=1)
-  )
-ggsave(paste0(img_dir,basename,"PRR_and_GAM_score_stage_correlation.png"),g,width=7,height=5)
-
-
-# Comparing PRR and GAM dynamics across stages -----------------------------------------
-
-sub <- 
-  dts[database=="covariate_adjusted"]
-sub[is.na(PRR)]$PRR <- 0
-norm_ades_gam <- 
-  normalize_data(sub,
-                 score="gam_score",strata="nichd",groups = c())
-norm_ades_gam$type <- "GAM"
-norm_ades_prr <- 
-  normalize_data(sub,
-                 score="PRR",strata="nichd",groups = c())
-norm_ades_prr$type <- "PRR"
-
-g <- 
-  bind_rows(
-    norm_ades_prr,
-    norm_ades_gam
-    ) %>%
-  .[,.(ade,nichd,norm,type)] %>% 
-  unique() %>% 
-  .[ade %in% sample(sig_null_ades,2e3,replace=F)] %>%  
-  ggplot(aes(nichd,norm)) +
-  geom_line(aes(group=ade),alpha=0.1) +
-  facet_grid(type~.) +
-  theme(
-    axis.text.x = element_text(angle=45,vjust=1,hjust=1)
-  ) +
-  xlab("") +
-  ylab("Normalized score") +
-  theme(
-    strip.background = element_blank()
-  )
-ggsave(paste0(img_dir,basename,"gam_versus_prr_norm_score_across_stages.png"),g,width=6,height=6)
-
-# Significance from report shuffling in socs --------------------------------------
-
-null_dts <- fread(paste0(data_dir,"database_generation_with_covariates_null_simulation.csv"))
+# putative ADEs across stages by socs --------------------------------------
 
 meddra_relationships <- 
   fread(paste0(data_dir,"standard_reactions_meddra_relationships.csv"))
@@ -410,7 +314,7 @@ g <- merge(
   ggplot(aes(factor(nichd,levels=stages),frac)) +
   geom_bar(stat="identity",color="black",fill="grey") +
   xlab("") +
-  ylab("Percent of significant drug-events") +
+  ylab("Percent of putative ADEs") +
   scale_y_continuous(labels=scales::percent) +
   facet_wrap(~soc,nrow=3,labeller = label_wrap_gen(width=20)) +
   theme(
@@ -420,9 +324,7 @@ g <- merge(
 ggsave(paste0(img_dir,basename,'null_simulation_significant_risks_across_stages_by_soc.png'),
        g,width=20,height=10)
 
-# Significance from report shuffling in atc1s --------------------------------------
-
-null_dts <- fread(paste0(data_dir,"database_generation_with_covariates_null_simulation.csv"))
+# putative ADEs across stages by atc1s --------------------------------------
 
 drugbank_atc <- 
   fread(paste0(data_dir,"compound_drugbank05/drug_atc_codes_rxnorm_joined.csv"))
@@ -461,18 +363,18 @@ g <-
   ggplot(aes(nichd,frac)) +
   geom_bar(stat="identity",color="black",fill="grey") +
   xlab("") +
-  ylab("Percent of significant drug-events") +
+  ylab("Percent of putative ADEs") +
   scale_y_continuous(labels=scales::percent) +
-  facet_wrap(~atc1,ncol=5,labeller = label_wrap_gen(width=25)) +
+  facet_wrap(~atc1,nrow=2,labeller = label_wrap_gen(width=25)) +
   theme(
     strip.background = element_blank(),
     axis.text.x = element_text(angle=45,vjust=1,hjust=1)
   )
 ggsave(paste0(img_dir,basename,'null_simulation_significant_risks_across_stages_by_atc1.png'),
-       g,width=15,height=10)
+       g,width=20,height=6)
 
 
-# Significance from report shuffling in CYP enzymes ----------------------------------------------
+# putative ADEs across stages by CYP enzymes ----------------------------------------------
 
 drugbank_atc_cyp_substrates <- 
   fread(paste0(data_dir,"drugbank_atc_cyp_substrates.csv"))

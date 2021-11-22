@@ -1,6 +1,6 @@
 #' Title: "A database of pediatric drug effects to evaluate ontogenic mechanisms from child growth and development" study
 #' 
-#' Author details: Nicholas Giangreco
+#' Script author details: Nicholas Giangreco
 #' 
 #' This script processes and generates the data for our
 #' gene expression across childhood dataset
@@ -169,102 +169,12 @@ exprSets[,length(unique(PROBEID))]
 exprSets[,length(unique(sample)),assay]
 exprSets[,length(unique(sample)),.(gse,assay)]
 
-
-# # take a gander -----------------------------------------------------------
-# 
-# 
-# g <- exprSets %>%
-#     .[,
-#       .(
-#           PROBEID,
-#           sample,
-#           value = as.numeric(value)
-#           )
-#       ] %>%
-#     ggplot(aes(log2(value),group=sample)) +
-#     geom_density(alpha=0.1,color="black",fill="gray") +
-#     scale_x_continuous(labels=scales::comma) +
-#     scale_y_continuous(labels=scales::comma) +
-#     xlab("log2 gene expression probe values") +
-#     ylab("Density") +
-#     theme(
-#         legend.position = "none"
-#     )
-# ggsave(paste0(img_dir,basename,"raw_cel_all_processed_data.png"),g,width=8,height=6)
-# 
-# rm(g)
-# 
 # download geo data via romopomics -------------------------------------------------------
 
 stevens_gse_lst <- fetch_geo_series(gse_ids,data_dir = tempdir())
 
 lst <- stevens_gse_lst[grep("GSE",names(stevens_gse_lst))]
 
-
-# # process feature data ----------------------------------------------------
-# 
-# process_expr <- function(x,gse = "GSE"){
-#   
-#   tmp <- 
-#     Biobase::exprs(x)
-#   probes <- rownames(tmp)
-#   tmp_dt <- tmp %>% data.table()
-#   tmp_dt$PROBEID <- probes
-#   tmp_dt_melt <- 
-#     tmp_dt %>% 
-#     melt(id.vars="PROBEID",variable.name="sample") %>% 
-#     .[,.(gse = gse,sample,PROBEID,value)]
-#   tmp_dt_melt
-#   
-# }
-# 
-# exprSets_geo <- 
-# bind_rows(
-#   process_expr(lst$GSE9006$GSE$GSE$`GSE9006-GPL96_series_matrix.txt.gz`,gse="GSE9006"),
-#   process_expr(lst$GSE9006$GSE$GSE$`GSE9006-GPL97_series_matrix.txt.gz`,gse="GSE9006"),
-#   process_expr(lst$GSE26440$GSE$GSE$GSE26440_series_matrix.txt.gz,gse="GSE26440"),
-#   process_expr(lst$GSE11504$GSE$GSE$GSE11504_series_matrix.txt.gz,gse="GSE11504"),
-#   process_expr(lst$GSE6011$GSE$GSE$GSE6011_series_matrix.txt.gz,gse="GSE6011"),
-#   process_expr(lst$GSE37721$GSE$GSE$GSE37721_series_matrix.txt.gz,gse="GSE37721"),
-#   process_expr(lst$GSE20307$GSE$GSE$GSE20307_series_matrix.txt.gz,gse="GSE20307"),
-#   process_expr(lst$GSE20436$GSE$GSE$GSE20436_series_matrix.txt.gz,gse="GSE20436")
-# )
-# 
-# exprSets_geo[,.(gse)] %>% unique()
-# 
-# exprSets_geo <- 
-#   merge(
-#     exprSets_geo,
-#     exprSet_files[,.(gse,sample,assay)] %>% unique(),
-#     by=c("gse","sample"),
-#     all.x=T
-#     ) %>% 
-#   bind_rows(
-#     exprSets[gse=="TABM666",.(gse,sample,PROBEID,value = 2^value)]
-#   )
-# 
-# exprSets_geo[,.(gse,assay)] %>% unique()
-# 
-# exprSets_geo[gse=="GSE37721","assay"] <- "illuminaHumanv3"
-# exprSets_geo[gse=="TABM666","assay"] <- "hgu133plus2"
-# exprSets_geo[gse=="GSE26440","assay"] <- "hgu133plus2"
-# 
-# exprSets_geo[,.(gse,assay)] %>% unique()
-# 
-# exprSets_geo %>% 
-#   merge(
-#     exprSets[gse=="GSE9006" & assay=="hgu133a",.(sample,PROBEID,processed_value = 2^value)],
-#     by=c("sample","PROBEID")
-#   ) %>% 
-#   sample_n(10000) %>% 
-#   ggplot(aes(value,processed_value)) +
-#   geom_point(alpha=0.1) +
-#   geom_abline(slope=1,intercept=0) +
-#   xlab("value from reprocessed CEL data") +
-#   ylab("value from study upload to GEO")
-# 
-# rm(exprSets)
-# 
 # process phenotype data --------------------------------------------------
 
 pdata <- NULL

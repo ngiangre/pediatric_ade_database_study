@@ -1,9 +1,9 @@
 #' Title: "A database of pediatric drug effects to evaluate ontogenic mechanisms from child growth and development" study
 #' 
-#' Author details: Nicholas Giangreco
+#' Script author details: Nicholas Giangreco
 #' 
 #' This script generates the enrichment data and plots of our
-#' identified significant drug-events in an ADE reference set
+#' identified significant drug-events in an pediatric ADE reference set
 
 # Purpose -----------------------------------------------------------------
 
@@ -59,36 +59,59 @@ ades_child_both <-
     pediatric_reference[Population %in% c("B","C"),unique(ade)]
 
 
-# positive vs negative GAM scores ----------------------------------
+# Performance metrics to detect GRiP ADEs ---------------------------------
 
-tmp <- dts[
-    database=="covariate_adjusted",
-    .(ade,nichd,gam_score,atc_concept_name,meddra_concept_name)
+tmp <- 
+    dts[
+        database=="covariate_adjusted",
+        .(ade,nichd,gam_score_90mse,gam_score,nomsig = ade %in% sig_ades)
     ] %>% 
     unique() %>% 
     merge(
         pediatric_reference_with_negatives[,
-            .(ade,Control)
+                                           .(ade,Control)
         ] %>% unique(),
         by="ade"
     ) %>% 
-    dcast(ade + nichd ~ Control,
-          value.var = "gam_score") 
-
-test_dts <- NULL
-for(st in category_levels$nichd){
-    a <- tmp[nichd==st,na.omit(P)] %>% as.numeric()
-    b <- tmp[nichd==st,na.omit(N)] %>% as.numeric()
-    test <- ks.test(a,b,alternative = "greater")
-    dt <- data.table(nichd = st, pvalue = test$p.value,
-                     positive_mean = mean(a),negative_mean = mean(b)
+    merge(
+        null_dts[,.(null_99 = quantile(gam_score,c(0.99))),nichd],
+        by="nichd"
     )
-    test_dts <- 
-        rbind(test_dts,dt)
-}
 
-test_dts
+nomsigany_avg <- 
+    tmp[nomsig==T,
+        .(Control,
+          gam_score = mean(gam_score),
+          gam_score_90mse = mean(gam_score_90mse)),
+        ade] %>% unique()
 
+
+
+metric_boot <- 
+    function(dat,metric="auc",boot=100){
+        vec <- sapply(1:boot,function(i){
+            set.seed(i)
+            ind <- sample(1:nrow(dat),nrow(dat),replace=T)
+            truth <- 
+                dat[ind,Control] %>% factor(levels=c("N","P"))
+            estimate <- 
+                dat[ind,gam_score_90mse]
+            ROCR::performance(
+                ROCR::prediction(estimate,truth),
+                metric
+            )@y.values[[1]]
+        })
+        return(
+            c(
+                "lwr" = quantile(vec,c(0.025)) %>% unname,
+                "mean" = mean(vec),
+                "upr" = quantile(vec,c(0.975)) %>% unname
+            )
+        )
+    }
+
+metric_boot(nomsigany_avg,"auc")
+metric_boot(nomsigany_avg,"aucpr")
 
 # statistically significant drug event risks vs total positive vs negative ADEs ----------------------------------
 
@@ -168,7 +191,7 @@ g <- pediatric_reference[
     geom_point(aes(y=gam_score),size=1,color="black",fill="gray") +
     geom_errorbar(aes(ymin=gam_score_90mse,ymax=gam_score_90pse),
                   color="black",width=0.2,size=0.5) +
-    scale_y_continuous(sec.axis=sec_axis(~.,name="Risk of ADE\n(GAM score)")) +
+    scale_y_continuous(sec.axis=sec_axis(~.,name="Risk of ADE\n(dGAM score)")) +
     guides(fill=guide_legend(title="Report type")) +
     xlab("") +
     ylab("log10(Number of reports)") +
@@ -180,6 +203,8 @@ g <- pediatric_reference[
         axis.text.x = element_text(angle=45,vjust=1,hjust=1)
     )
 ggsave(paste0(img_dir,basename,"significant_drug_events.png"),g,width=18,height=12)
+
+
 
 
 

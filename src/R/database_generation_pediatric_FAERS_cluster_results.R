@@ -1,6 +1,6 @@
 #' Title: "A database of pediatric drug effects to evaluate ontogenic mechanisms from child growth and development" study
 #' 
-#' Author details: Nicholas Giangreco
+#' Script author details: Nicholas Giangreco
 #' 
 #' This script generates the plots from our
 #' data-driven clustering of drug-events in Pediatric FAERS 
@@ -103,45 +103,6 @@ drugbank_atc_cyp_substrates <-
 drugbank_atc <- 
   fread(paste0(data_dir,"compound_drugbank05/drug_atc_codes_rxnorm_joined.csv"))
 
-# Proportion of significant drug-events in clusters ----------------------------------------
-
-tmp <- X
-tmp$sig_null <- tmp[,ade %in% sig_null_ades]
-tmp[,.(N = .N),cluster]
-tmp[,.(N = .N/nrow(tmp)),cluster]
-tmp[,.(frac = sum(sig_null)),cluster]
-tmp[,.(frac = sum(sig_null)/.N),cluster]
-
-g <- tmp[,.(frac = .N/nrow(tmp)),cluster] %>% 
-  ggplot(aes(factor(cluster),frac,fill=factor(cluster))) +
-  geom_bar(stat="identity",color="black") +
-  xlab("") +
-  ylab("Proportoin of\ndrug-events") +
-  scale_fill_manual(values=cluster_colors,labels=cluster_names) +
-  guides(fill=guide_legend(title="Cluster category",title.position = "top")) +
-  scale_x_discrete(labels=cluster_names) +
-  scale_y_continuous(labels=scales::percent) +
-  theme(
-    legend.position = "bottom",
-    axis.text.x = element_text(angle=45,vjust=1,hjust=1)
-  )
-ggsave(paste0(img_dir,basename,"prop_drug_events_in_clusters_",bp,"best_hyperparameter_set.png"),g,width=8,height=6)
-
-g <- tmp[,.(frac = sum(sig_null)/.N),cluster] %>% 
-  ggplot(aes(factor(cluster),frac,fill=factor(cluster))) +
-  geom_bar(stat="identity",color="black") +
-  xlab("") +
-  ylab("Proportoin of\nsignificant drug-events") +
-  scale_fill_manual(values=cluster_colors,labels=cluster_names) +
-  guides(fill=guide_legend(title="Cluster category",title.position = "top")) +
-  scale_x_discrete(labels=cluster_names) +
-  scale_y_continuous(labels=scales::percent) +
-  theme(
-    legend.position = "none",
-    axis.text.x = element_text(angle=45,vjust=1,hjust=1)
-  )
-ggsave(paste0(img_dir,basename,"prop_significant_drug_events_in_clusters_",bp,"best_hyperparameter_set.png"),g,width=6,height=6)
-
 # Plot drug event clusters ------------------------------------------------
 
 g <- norm_ades %>% 
@@ -154,7 +115,7 @@ g <- norm_ades %>%
   geom_line(alpha=0.1) +
   guides(color=guide_legend(title="Cluster\ncategory",override.aes = list(alpha = 1))) +
   xlab("") +
-  ylab("Normalized GAM score") +
+  ylab("Normalized dGAM score") +
   scale_color_manual(values=cluster_colors,labels=cluster_names) +
   facet_wrap(~cluster,labeller = labeller(cluster = cluster_names)) +
   theme(
@@ -163,6 +124,60 @@ g <- norm_ades %>%
     axis.text.x = element_text(angle=45,vjust=1,hjust=1)
   )
 ggsave(paste0(img_dir,basename,"sample_risk_patterns_in_clusters_",bp,"best_hyperparameter_set.png"),g,width=8,height=6)
+
+# Proportion of significant drug-events in clusters ----------------------------------------
+
+tmp <- X
+tmp$sig_null <- tmp[,ade %in% sig_null_ades]
+
+cluster_names
+tmp[,.(N = .N),cluster]
+tmp[,.(N = .N/nrow(tmp)),cluster]
+tmp[,.(frac = sum(sig_null)),cluster]
+tmp[,.(frac = sum(sig_null)/.N),cluster]
+
+g <- tmp[,.(frac = sum(sig_null)/.N),cluster] %>% 
+  ggplot(aes(factor(cluster),frac,fill=factor(cluster))) +
+  geom_bar(stat="identity",color="black") +
+  xlab("") +
+  ylab("Proportoin of\nputative ADEs") +
+  scale_fill_manual(values=cluster_colors,labels=cluster_names) +
+  guides(fill=guide_legend(title="Cluster category",title.position = "top")) +
+  scale_x_discrete(labels=cluster_names) +
+  scale_y_continuous(labels=scales::percent) +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle=45,vjust=1,hjust=1)
+  )
+ggsave(paste0(img_dir,basename,"prop_significant_drug_events_in_clusters_",bp,"best_hyperparameter_set.png"),g,width=6,height=6)
+
+
+# Talley of plateau putative ADEs at stages -------------------------------
+
+tmp <- X[cluster==names(cluster_names[unname(cluster_names)=="Plateau"])]
+tmp$sig_null <- tmp[,ade %in% sig_null_ades]
+
+g <- tmp[
+  sig_null==T
+  ] %>% 
+  pivot_longer(cols=stages) %>% 
+  data.table() %>% 
+  .[,.SD[which.max(value)],ade] %>% 
+  .[,.N,name] %>% 
+  .[order(factor(name,stages))] %>% 
+  ggplot(aes(factor(name,stages),N)) +
+  geom_bar(color="black",fill=cluster_colors[unname(cluster_names)=="Plateau"],
+           stat="identity") +
+  geom_text(aes(y=N,label=N),nudge_y = 100,fontface="bold") +
+  xlab("") +
+  ylab("Number of putative ADEs\nwith plateau dynamic") +
+  scale_y_continuous(labels=scales::comma) +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.text.x = element_text(angle=45,vjust=1,hjust=1)
+  )
+ggsave(paste0(img_dir,basename,"prop_significant_plateau_drug_events_in_stages.png"),g,width=6,height=5)
 
 # Cluster assignments for ADE class enrichments --------------------------
 
@@ -256,8 +271,32 @@ frac_clusters <- merge(
   .[order(frac,decreasing = T)] %>%
   .[,.SD[1],.(atc_concept_name,meddra_concept_name,nichd)]
 
-
 g <- merge(
+  tmp[,.(ade_name = paste0(atc_concept_name," --- ",meddra_concept_name),
+         ade,cluster)] %>% 
+    unique(),
+  norm_ades,
+  by=c("ade"),
+  allow.cartesian=T
+) %>% 
+  .[,.(nichd = factor(nichd,levels=stages),ade,cluster,ade_name,norm)] %>% 
+  .[order(nichd)] %>% 
+  .[grepl("montelukast",ade_name)] %>% 
+  ggplot(aes(factor(nichd,levels=stages),norm,color=factor(cluster))) +
+  geom_line(aes(group=ade),size=1) +
+  scale_color_manual(values=cluster_colors,labels=cluster_names) +
+  facet_wrap(~ade_name,
+             labeller = label_wrap_gen(width=20),ncol=8) +
+  xlab("") +
+  ylab("Normalized dGAM score") +
+  theme(
+    legend.position = "none",
+    strip.background = element_blank(),
+    axis.text.x = element_text(angle=45,vjust=1,hjust=1)
+  )
+ggsave(paste0(img_dir,basename,"cluster_assignments_montelukast_psychiatric_disorders.png"),g,width=6,height=5)
+
+merge(
   tmp[,.(ade_name = paste0(atc_concept_name," --- ",meddra_concept_name),
          ade,cluster_name)] %>% 
     unique(),
@@ -267,41 +306,29 @@ g <- merge(
 ) %>% 
   .[,.(nichd = factor(nichd,levels=stages),ade,cluster_name,ade_name,norm)] %>% 
   .[order(nichd)] %>% 
-  ggplot(aes(factor(nichd,levels=stages),norm,color=cluster_name)) +
+  .[,.N,cluster_name]
+
+g <- merge(
+  tmp[,.(ade_name = paste0(atc_concept_name," --- ",meddra_concept_name),
+         ade,cluster)] %>% 
+    unique(),
+  norm_ades,
+  by=c("ade"),
+  allow.cartesian=T
+) %>% 
+  .[,.(nichd = factor(nichd,levels=stages),ade,cluster,ade_name,norm)] %>% 
+  .[order(nichd)] %>% 
+  ggplot(aes(factor(nichd,levels=stages),norm,color=factor(cluster))) +
   geom_line(aes(group=ade),size=1) +
+  scale_color_manual(values=cluster_colors,labels=cluster_names) +
   facet_wrap(~ade_name,
              labeller = label_wrap_gen(width=20),ncol=8) +
   guides(color=guide_legend(title="Cluster",title.position = "top")) +
   xlab("") +
-  ylab("Normalized GAM score") +
+  ylab("Normalized dGAM score") +
   theme(
     legend.position = "bottom",
     strip.background = element_blank(),
     axis.text.x = element_text(angle=45,vjust=1,hjust=1)
   )
 ggsave(paste0(img_dir,basename,"cluster_assignments_enriched_drug_risks.png"),g,width=20,height=15)
-
-g <- merge(
-  tmp[,.(ade_name = paste0(atc_concept_name," --- ",meddra_concept_name),
-         ade,cluster_name)] %>% 
-    unique(),
-  norm_ades,
-  by=c("ade"),
-  allow.cartesian=T
-) %>% 
-  .[,.(nichd = factor(nichd,levels=stages),ade,cluster_name,ade_name,norm)] %>% 
-  .[order(nichd)] %>% 
-  .[grepl("montelukast",ade_name)] %>% 
-  ggplot(aes(factor(nichd,levels=stages),norm,color=cluster_name)) +
-  geom_line(aes(group=ade),size=1) +
-  facet_wrap(~ade_name,
-             labeller = label_wrap_gen(width=20),ncol=8) +
-  guides(color=guide_legend(title="Cluster",title.position = "top")) +
-  xlab("") +
-  ylab("Normalized GAM score") +
-  theme(
-    legend.position = "bottom",
-    strip.background = element_blank(),
-    axis.text.x = element_text(angle=45,vjust=1,hjust=1)
-  )
-ggsave(paste0(img_dir,basename,"cluster_assignments_montelukast_psychiatric_disorders.png"),g,width=6,height=6)

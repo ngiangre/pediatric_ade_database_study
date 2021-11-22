@@ -1,7 +1,7 @@
 
 #' Title: "A database of pediatric drug effects to evaluate ontogenic mechanisms from child growth and development" study
 #' 
-#' Author details: Nicholas Giangreco
+#' Script author details: Nicholas Giangreco
 #' 
 #' This script generates the table of Pediatric FAERS characteristics
 
