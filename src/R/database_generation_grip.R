@@ -59,12 +59,12 @@ ades_child_both <-
     pediatric_reference[Population %in% c("B","C"),unique(ade)]
 
 
-# Performance metrics to detect GRiP ADEs ---------------------------------
+# dGAM performance metrics to detect GRiP ADEs ---------------------------------
 
 tmp <- 
     dts[
         database=="covariate_adjusted",
-        .(ade,nichd,gam_score_90mse,gam_score,nomsig = ade %in% sig_ades)
+        .(ade,nichd,gam_score_90mse,gam_score)
     ] %>% 
     unique() %>% 
     merge(
@@ -72,14 +72,10 @@ tmp <-
                                            .(ade,Control)
         ] %>% unique(),
         by="ade"
-    ) %>% 
-    merge(
-        null_dts[,.(null_99 = quantile(gam_score,c(0.99))),nichd],
-        by="nichd"
-    )
+    ) 
 
 nomsigany_avg <- 
-    tmp[nomsig==T,
+    tmp[ade %in% tmp[gam_score_90mse>0,unique(ade)],
         .(Control,
           gam_score = mean(gam_score),
           gam_score_90mse = mean(gam_score_90mse)),
@@ -113,7 +109,60 @@ metric_boot <-
 metric_boot(nomsigany_avg,"auc")
 metric_boot(nomsigany_avg,"aucpr")
 
-# statistically significant drug event risks vs total positive vs negative ADEs ----------------------------------
+metric_boot(nomsigany_avg,"rec")
+metric_boot(nomsigany_avg,"aucpr")
+
+# PRR performance metrics to detect GRiP ADEs ---------------------------------
+
+tmp <- 
+    dts[
+        database=="covariate_adjusted",
+        .(ade,nichd,PRR_90mse,PRR)
+    ] %>% 
+    unique() %>% 
+    merge(
+        pediatric_reference_with_negatives[,
+                                           .(ade,Control)
+        ] %>% unique(),
+        by="ade"
+    )
+
+nomsigany_avg <- 
+    tmp[ade %in% tmp[PRR_90mse>0,unique(ade)],
+        .(Control,
+          PRR = mean(PRR,na.rm=T),
+          PRR_90mse = mean(PRR_90mse,na.rm=T)),
+        ade] %>% unique()
+
+
+
+metric_boot <- 
+    function(dat,metric="auc",boot=100){
+        vec <- sapply(1:boot,function(i){
+            set.seed(i)
+            ind <- sample(1:nrow(dat),nrow(dat),replace=T)
+            truth <- 
+                dat[ind,Control] %>% factor(levels=c("N","P"))
+            estimate <- 
+                dat[ind,PRR_90mse]
+            ROCR::performance(
+                ROCR::prediction(estimate,truth),
+                metric
+            )@y.values[[1]]
+        })
+        return(
+            c(
+                "lwr" = quantile(vec,c(0.025)) %>% unname,
+                "mean" = mean(vec),
+                "upr" = quantile(vec,c(0.975)) %>% unname
+            )
+        )
+    }
+
+metric_boot(nomsigany_avg,"auc")
+metric_boot(nomsigany_avg,"aucpr")
+
+# dGAM statistically significant drug event risks vs total positive vs negative ADEs ----------------------------------
 
 
 tmp <- 
@@ -148,9 +197,72 @@ or = (a / b) / (c / d)
 se = sqrt( (1/a) + (1/b) + (1/c) + (1/d))
 
 or
+exp( log(or) - 1.96*se )
+exp( log(or) + 1.96*se )
+
+tp = a
+fp = c
+fn = (b-a)
+tn = (d-c)
+prec = tp/(tp+fp)
+prec
+rec = tp/b
+rec
+f1 = tp/(tp+0.5*(fp+fn))
+f1
+
+# PRR statistically significant drug event risks vs total positive vs negative ADEs ----------------------------------
+
+
+tmp <- 
+    dts[
+        database=="covariate_adjusted",
+        .(ade,nichd,PRR_90mse)
+    ] %>% 
+    unique() %>% 
+    merge(
+        pediatric_reference_with_negatives[,
+                                           .(ade,Control)
+        ] %>% unique(),
+        by="ade"
+    )
+
+tmp[,length(unique(ade))]
+tmp[Control=="P",length(unique(ade))]
+tmp[Control=="N",length(unique(ade))]
+
+merge(
+    tmp[,.(total = length(unique(ade))),.(Control)], 
+    tmp[PRR_90mse>0,
+        .(sig = length(unique(ade))),
+        .(Control)]
+)
+
+a = 71
+b = 75
+c = 110
+d = 112
+tp = a
+fp = c
+fn = (b-a)
+tn = (d-c)
+or = (a/b)/(c/d)
+se = sqrt( (1/a) + (1/b) + (1/c) + (1/d))
+
+or
 exp( log(or) - 1.645*se )
 exp( log(or) + 1.645*se )
 
+tp = a
+fp = c
+fn = (b-a)
+tn = (d-c)
+prec = tp/(tp+fp)
+prec
+rec = tp/b
+rec
+f1 = tp/(tp+0.5*(fp+fn))
+f1
 
 # significant drug-event risks and reporting -----------------------------------
 
